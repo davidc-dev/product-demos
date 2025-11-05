@@ -12,7 +12,7 @@
     gcp_subnet_name: "{{ gcp_vpc_name }}-subnet"
     gcp_subnet_cidr: 10.0.0.0/16
     gcp_firewall_name: "{{ gcp_vpc_name }}-fw"
-    gcp_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    # gcp_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
     gcp_ssh_user: "{{ gcp_ssh_user }}"
     gcp_purpose_tag: demo
     gcp_zone: "us-south1-a"
@@ -28,69 +28,69 @@
     gcp_vm_owner: "{{ vm_owner_email }}"
     # gcp_user_data_template: cloud-init-template  # corresponds to .j2 file
 
-tasks:
-  # === 1. Get subnet info ===
-  - name: GCP | CREATE VM | Get subnet info
-    google.cloud.gcp_compute_subnetwork_info:
-      project: "{{ gcp_project }}"
-      auth_kind: application
-      # service_account_file: "{{ gcp_service_account_file }}"
-      region: "{{ gcp_region }}"
-      filters:
-        - name = "{{ gcp_subnet_name }}"
-    register: gcp_subnet
+  tasks:
+    # === 1. Get subnet info ===
+    - name: GCP | CREATE VM | Get subnet info
+      google.cloud.gcp_compute_subnetwork_info:
+        project: "{{ gcp_project }}"
+        auth_kind: application
+        # service_account_file: "{{ gcp_service_account_file }}"
+        region: "{{ gcp_region }}"
+        filters:
+          - name = "{{ gcp_subnet_name }}"
+      register: gcp_subnet
 
-  - name: GCP | CREATE VM | Save subnet selfLink
-    ansible.builtin.set_fact:
-      gcp_subnet_selflink: "{{ gcp_subnet.resources[0].selfLink }}"
+    - name: GCP | CREATE VM | Save subnet selfLink
+      ansible.builtin.set_fact:
+        gcp_subnet_selflink: "{{ gcp_subnet.resources[0].selfLink }}"
 
-  # === 2. Get image info (equivalent of ec2_ami_info) ===
-  - name: GCP | CREATE VM | Find image
-    google.cloud.gcp_compute_image_info:
-      project: "{{ gcp_project }}"
-      auth_kind: application
-      # service_account_file: "{{ gcp_service_account_file }}"
-      filters:
-        - name eq "{{ gcp_image_name }}"
-    register: gcp_images
+    # === 2. Get image info (equivalent of ec2_ami_info) ===
+    - name: GCP | CREATE VM | Find image
+      google.cloud.gcp_compute_image_info:
+        project: "{{ gcp_project }}"
+        auth_kind: application
+        # service_account_file: "{{ gcp_service_account_file }}"
+        filters:
+          - name eq "{{ gcp_image_name }}"
+      register: gcp_images
 
-  - name: GCP | CREATE VM | Save image
-    ansible.builtin.set_fact:
-      gcp_image_selflink: "{{ gcp_images.resources[0].selfLink }}"
+    - name: GCP | CREATE VM | Save image
+      ansible.builtin.set_fact:
+        gcp_image_selflink: "{{ gcp_images.resources[0].selfLink }}"
 
-  # === 3. Create VM instance ===
-  - name: GCP | CREATE VM | Create instance
-    google.cloud.gcp_compute_instance:
-      project: "{{ gcp_project }}"
-      zone: "{{ gcp_zone }}"
-      auth_kind: application
-      # service_account_file: "{{ gcp_service_account_file }}"
-      name: "{{ gcp_vm_name }}"
-      machine_type: "zones/{{ gcp_zone }}/machineTypes/{{ gcp_machine_type }}"
-      disks:
-        - auto_delete: true
-          boot: true
-          initialize_params:
-            source_image: "{{ gcp_image_selflink }}"
-      network_interfaces:
-        - subnetwork: "{{ gcp_subnet_selflink }}"
-          access_configs:
-            - name: External NAT
-              type: ONE_TO_ONE_NAT
-      metadata:
-        items:
-          - key: ssh-keys
-            value: "{{ gcp_key_user }}:{{ gcp_public_key }}"
-          # - key: startup-script
-          #   value: "{{ lookup('template', gcp_user_data_template + '.j2', template_vars=dict(gcp_vm_name=gcp_vm_name)) }}"
-      labels:
-        # blueprint: "{{ gcp_blueprint | lower }}"
-        purpose: "{{ gcp_purpose_tag | lower }}"
-        env: "{{ gcp_env_tag | lower }}"
-        ansible_group: "{{ gcp_ansible_group | lower }}"
-        owner: "{{ gcp_vm_owner | lower }}"
-      tags:
-        items:
-          - "{{ gcp_network_name }}"
-      state: present
-    register: gcp_vm_output
+    # === 3. Create VM instance ===
+    - name: GCP | CREATE VM | Create instance
+      google.cloud.gcp_compute_instance:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: application
+        # service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ gcp_vm_name }}"
+        machine_type: "zones/{{ gcp_zone }}/machineTypes/{{ gcp_machine_type }}"
+        disks:
+          - auto_delete: true
+            boot: true
+            initialize_params:
+              source_image: "{{ gcp_image_selflink }}"
+        network_interfaces:
+          - subnetwork: "{{ gcp_subnet_selflink }}"
+            access_configs:
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+        metadata:
+          items:
+            - key: ssh-keys
+              value: "{{ gcp_key_user }}:{{ gcp_public_key }}"
+            # - key: startup-script
+            #   value: "{{ lookup('template', gcp_user_data_template + '.j2', template_vars=dict(gcp_vm_name=gcp_vm_name)) }}"
+        labels:
+          # blueprint: "{{ gcp_blueprint | lower }}"
+          purpose: "{{ gcp_purpose_tag | lower }}"
+          env: "{{ gcp_env_tag | lower }}"
+          ansible_group: "{{ gcp_ansible_group | lower }}"
+          owner: "{{ gcp_vm_owner | lower }}"
+        tags:
+          items:
+            - "{{ gcp_network_name }}"
+        state: present
+      register: gcp_vm_output
