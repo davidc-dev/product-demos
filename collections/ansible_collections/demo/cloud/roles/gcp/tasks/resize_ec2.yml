@@ -1,0 +1,57 @@
+---
+# parameters
+# gcp_machine_type: new machine type, e.g. e2-standard-4
+- name: GCP | RESIZE VM
+  delegate_to: localhost
+  vars:
+    controller_dependency_check: false  # noqa: var-naming[no-role-prefix]
+    controller_inventory_sources:
+      - name: GCP Inventory
+        inventory: Demo Inventory
+        organization: Default
+        wait: true
+
+  block:
+    - name: GCP | RESIZE VM | assert required vars
+      ansible.builtin.assert:
+        that:
+          - gcp_vm_name is defined
+          - gcp_zone is defined
+          - gcp_project is defined
+        fail_msg: "gcp_vm_name, gcp_zone, and gcp_project are required for resize operations"
+
+    - name: GCP | RESIZE VM | stop instance
+      google.cloud.gcp_compute_instance:
+        name: "{{ gcp_vm_name }}"
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        state: stopped
+        wait: true
+
+    - name: GCP | RESIZE VM | change machine type
+      google.cloud.gcp_compute_instance:
+        name: "{{ gcp_vm_name }}"
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        machine_type: "zones/{{ gcp_zone }}/machineTypes/{{ gcp_machine_type }}"
+        state: present
+        wait: true
+
+    - name: GCP | RESIZE VM | start instance
+      google.cloud.gcp_compute_instance:
+        name: "{{ gcp_vm_name }}"
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        state: started
+        wait: true
+
+    - name: Synchronize inventory
+      run_once: true
+      ansible.builtin.include_role:
+        name: infra.controller_configuration.inventory_source_update

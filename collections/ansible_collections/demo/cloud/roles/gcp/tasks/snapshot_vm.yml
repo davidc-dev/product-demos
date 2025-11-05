@@ -1,0 +1,57 @@
+---
+- name: GCP | SNAPSHOT VM
+  delegate_to: localhost
+  block:
+
+    # === 1. Assert required variables ===
+    - name: GCP | SNAPSHOT VM | assert VM name
+      ansible.builtin.assert:
+        that: gcp_vm_name is defined
+        fail_msg: "gcp_vm_name is required for snapshot operations"
+
+    # === 2. Include additional vars (if needed)
+    - name: GCP | SNAPSHOT VM | include vars
+      ansible.builtin.include_vars:
+        file: snapshot_vm.yml
+
+    # === 3. Get disks attached to instance ===
+    - name: GCP | SNAPSHOT VM | get disks attached to VM
+      google.cloud.gcp_compute_disk_info:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        filters:
+          - "users = zones/{{ gcp_zone }}/instances/{{ gcp_vm_name }}"
+      register: gcp_r_vol_info
+
+    # === 4. Create snapshots for each disk ===
+    - name: GCP | SNAPSHOT VM | take snapshots
+      loop: "{{ gcp_r_vol_info.resources }}"
+      loop_control:
+        loop_var: volume
+        label: "{{ volume.name }}"
+      google.cloud.gcp_compute_snapshot:
+        project: "{{ gcp_project }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ gcp_vm_name }}-{{ volume.name }}-{{ '%Y%m%d%H%M%S' | strftime(ansible_date_time.epoch) }}"
+        source_disk: "{{ volume.selfLink }}"
+        description: "Snapshot taken by Ansible automation"
+        labels:
+          vm: "{{ gcp_vm_name }}"
+          purpose: "backup"
+      register: gcp_r_snapshots
+
+    # === 5. Format snapshot stat ===
+    - name: GCP | SNAPSHOT VM | format snapshot stat
+      ansible.builtin.set_fact:
+        gcp_snapshot_stat:
+          - key: "{{ inventory_hostname }}"
+            value: "{{ gcp_r_snapshots.results | map(attribute='resource') | list }}"
+
+    # === 6. Record snapshot info for later restore ===
+    - name: GCP | SNAPSHOT VM | record snapshot with host key
+      ansible.builtin.set_stats:
+        data:
+          gcp_snapshots: "{{ gcp_snapshot_stat | items2dict }}"

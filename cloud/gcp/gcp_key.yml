@@ -1,0 +1,38 @@
+---
+- name: Create GCP SSH key
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    gcp_project: "{{ project }}"
+    gcp_ssh_user: "{{ gcp_user }}"
+    gcp_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    gcp_service_account_file: /path/to/service-account.json
+    gcp_metadata_key: gcp-test-key
+    gcp_keypair_owner: undef
+
+  tasks:
+    - name: Fail if variables not defined
+      ansible.builtin.assert:
+        that:
+          - gcp_project is defined
+          - gcp_ssh_user is defined
+          - gcp_public_key is defined
+          - gcp_service_account_file is defined
+          - gcp_keypair_owner is defined
+        fail_msg: "Required variables not set"
+
+    - name: Add SSH key to GCP project metadata
+      google.cloud.gcp_compute_project_metadata_item:
+        project: "{{ gcp_project }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        key: ssh-keys
+        value: "{{ gcp_ssh_user }}:{{ gcp_public_key }}"
+        state: present
+
+    - name: Set stats
+      ansible.builtin.set_stats:
+        data:
+          stat_gcp_key_pair: '{{ gcp_metadata_key }}'

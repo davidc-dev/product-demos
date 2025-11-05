@@ -1,0 +1,124 @@
+---
+- name: GCP | RESTORE VM
+  delegate_to: localhost
+  block:
+
+    # === 1. Stop the VM ===
+    - name: GCP | RESTORE VM | stop VM
+      google.cloud.gcp_compute_instance:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        name: "{{ gcp_vm_name }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        state: stopped
+        wait: true
+
+    # === 2. Get existing disks attached to instance ===
+    - name: GCP | RESTORE VM | get attached disks
+      google.cloud.gcp_compute_disk_info:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        filters:
+          - "users = zones/{{ gcp_zone }}/instances/{{ gcp_vm_name }}"
+      register: gcp_r_vol_info
+
+    # === 3. Detach disks from instance ===
+    - name: GCP | RESTORE VM | detach disks
+      loop: "{{ gcp_r_vol_info.resources }}"
+      loop_control:
+        loop_var: volume
+        label: "{{ volume.name }}"
+      google.cloud.gcp_compute_disk:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ volume.name }}"
+        users: []    # remove attachment
+        state: present
+
+    # === 4A. Attach snapshots provided via variable ===
+    - name: GCP | RESTORE VM | attach snapshots from stat
+      when: inventory_hostname in gcp_snapshots
+      loop: "{{ gcp_snapshots[inventory_hostname] }}"
+      loop_control:
+        loop_var: snap
+        label: "{{ snap.snapshot_name }}"
+      google.cloud.gcp_compute_disk:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ gcp_vm_name }}-{{ snap.device_name | regex_replace('/', '-') }}"
+        source_snapshot: "projects/{{ gcp_project }}/global/snapshots/{{ snap.snapshot_name }}"
+        state: present
+      register: gcp_restored_disks
+
+    - name: GCP | RESTORE VM | attach disks to instance (from provided snapshots)
+      when: inventory_hostname in gcp_snapshots
+      loop: "{{ gcp_restored_disks.results }}"
+      loop_control:
+        loop_var: disk
+        label: "{{ disk.item.snapshot_name }}"
+      google.cloud.gcp_compute_instance:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ gcp_vm_name }}"
+        disks:
+          - source: "{{ disk.resource.selfLink }}"
+            auto_delete: false
+            boot: "{{ 'boot' in disk.item.device_name | default(false) }}"
+        state: present
+
+    # === 4B. Auto-discover snapshots if not provided ===
+    - name: GCP | RESTORE VM | get snapshots by VM name
+      when: inventory_hostname not in gcp_snapshots
+      google.cloud.gcp_compute_snapshot_info:
+        project: "{{ gcp_project }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        filters:
+          - "name eq {{ inventory_hostname }}"
+      register: gcp_r_snapshots
+
+    - name: GCP | RESTORE VM | create disk from latest snapshot
+      when: inventory_hostname not in gcp_snapshots
+      google.cloud.gcp_compute_disk:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ gcp_vm_name }}-restore-disk"
+        source_snapshot: "{{ gcp_r_snapshots.resources[0].selfLink }}"
+        state: present
+      register: gcp_restored_disk
+
+    - name: GCP | RESTORE VM | attach restored disk
+      when: inventory_hostname not in gcp_snapshots
+      google.cloud.gcp_compute_instance:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        name: "{{ gcp_vm_name }}"
+        disks:
+          - source: "{{ gcp_restored_disk.resource.selfLink }}"
+            boot: true
+            auto_delete: false
+        state: present
+
+    # === 5. Start the VM ===
+    - name: GCP | RESTORE VM | start VM
+      google.cloud.gcp_compute_instance:
+        project: "{{ gcp_project }}"
+        zone: "{{ gcp_zone }}"
+        name: "{{ gcp_vm_name }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ gcp_service_account_file }}"
+        state: started
+        wait: true

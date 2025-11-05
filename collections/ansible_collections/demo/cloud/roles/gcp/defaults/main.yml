@@ -1,0 +1,27 @@
+---
+#######
+# GCP Variables
+#######
+gcp_project: "{{ project }}"
+gcp_region: "us-south1"
+# gcp_service_account_file: "{{ gcp_service_account_file_path }}"
+
+gcp_vpc_name: "demo-vpc"
+gcp_subnet_name: "{{ gcp_vpc_name }}-subnet"
+gcp_subnet_cidr: 10.0.0.0/16
+gcp_firewall_name: "{{ gcp_vpc_name }}-fw"
+gcp_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+gcp_ssh_user: "{{ gcp_ssh_user }}"
+gcp_purpose_tag: demo
+gcp_zone: "us-south1-a"
+gcp_machine_type: "e2-medium"
+gcp_image_name: "debian-12-bookworm-v20251014"
+# gcp_key_user: "{{ gcp_ssh_user }}"
+# gcp_public_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+gcp_vm_name: "{{ gcp_vm_name}}"
+gcp_purpose_tag: demo
+gcp_env_tag: test
+# gcp_blueprint: "{{ vm_blueprint}}"
+gcp_ansible_group: demo-group
+gcp_vm_owner: "{{ vm_owner_email }}"
+# gcp_user_data_template: cloud-init-template  # corresponds to .j2 file

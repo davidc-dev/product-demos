@@ -1,0 +1,35 @@
+---
+- name: Create VPC network
+  google.cloud.gcp_compute_network:
+    name: "{{ gcp_vpc_name }}"
+    project: "{{ gcp_project }}"
+    auth_kind: serviceaccount
+    service_account_file: "{{ gcp_service_account_file }}"
+    auto_create_subnetworks: false
+    routing_config:
+      routing_mode: REGIONAL
+    state: present
+
+- name: Create subnet in the VPC
+  google.cloud.gcp_compute_subnetwork:
+    name: "{{ gcp_subnet_name }}"
+    project: "{{ gcp_project }}"
+    auth_kind: serviceaccount
+    service_account_file: "{{ gcp_service_account_file }}"
+    region: "{{ gcp_region }}"
+    ip_cidr_range: "{{ gcp_subnet_cidr }}"
+    network: "projects/{{ gcp_project }}/global/networks/{{ gcp_vpc_name }}"
+    private_ip_google_access: true
+    state: present
+
+- name: Create firewall rule (equivalent to security group)
+  google.cloud.gcp_compute_firewall:
+    name: "{{ gcp_firewall_name }}"
+    project: "{{ gcp_project }}"
+    auth_kind: serviceaccount
+    service_account_file: "{{ gcp_service_account_file }}"
+    network: "projects/{{ gcp_project }}/global/networks/{{ gcp_vpc_name }}"
+    direction: INGRESS
+    allowed:
+      - ip_protocol: tcp
+        ports: [ "22", "80", "443", "3389", "5986" ]
