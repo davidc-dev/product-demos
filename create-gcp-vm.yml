@@ -8,7 +8,7 @@
     gcp_region: "us-south1"
     # gcp_service_account_file: "{{ gcp_service_account_file_path }}"
 
-    gcp_vpc_name: "demo-vpc"
+    gcp_vpc_name: "{{ gcp_vpc_name}}"
     gcp_subnet_name: "{{ gcp_vpc_name }}-subnet"
     gcp_subnet_cidr: 10.0.0.0/16
     gcp_firewall_name: "{{ gcp_vpc_name }}-fw"
@@ -41,7 +41,7 @@
       register: gcp_subnet
 
     - name: GCP | CREATE VM | Save subnet selfLink
-      ansible.builtin.set_fact:
+      ansible.builtin.set_fa]
         gcp_subnet_selflink: "{{ gcp_subnet.resources[0].selfLink }}"
 
     # === 2. Get image info (equivalent of ec2_ami_info) ===
